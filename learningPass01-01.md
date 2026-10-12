@@ -1,4 +1,5 @@
-# 📘 データ処理モジュール総まとめ（OLTP / OLAP / Data Lake）
+# Microsoft Azure Data のコア データの概念の概要-コア データの概念を調べる
+データ処理モジュール総まとめ（OLTP / OLAP / Data Lake）
 
 ---
 
