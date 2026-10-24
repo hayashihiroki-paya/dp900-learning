@@ -27,10 +27,13 @@
 
 ```mermaid
 flowchart LR
-    A[イベント発生] --> B[ソースに取り込み<br>(Event Hubs / IoT Hub / Kafka / Storage)]
-    B --> C[永続クエリでリアルタイム処理]
-    C --> D[シンクへ出力<br>(Storage / DB / Dashboard / Queue)]
+    A[イベント発生] --> B[ソースに取り込み]
+    B --> B2[(Event Hubs / IoT Hub / Kafka / Storage)]
+    B2 --> C[永続クエリでリアルタイム処理]
+    C --> D[シンクへ出力]
+    D --> D2[(Storage / DB / Dashboard / Queue)]
 ```
+
 
 ---
 
