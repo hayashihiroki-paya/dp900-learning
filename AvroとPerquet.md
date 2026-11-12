@@ -2,68 +2,100 @@
 
 ## 結論
 
-- **Avro は「データの受け渡し・蓄積向け」**
-  - スキーマ変更（列追加など）に強い
+- **Avro はデータの受け渡し・蓄積向け**
+  - スキーマ変更に強い
   - イベントログやストリーミングデータに向く
+  - Schema Evolution（スキーマ進化）が得意
 
-- **Parquet は「分析向け」**
+- **Parquet は分析向け**
+  - 列指向ストレージ
+  - 高圧縮
   - 集計や検索が高速
-  - データウェアハウスや BI 分析に向く
+  - データウェアハウスや BI に向く
 
-実務では、
+実務では次のような流れがよく採用される。
 
-```text
-生データ
-↓
-Avro / JSON
-↓
-加工・整形
-↓
-Parquet
-↓
-分析・レポート
+```mermaid
+flowchart TD
+
+A[アプリ・Webサービス]
+--> B[Avro / JSON]
+
+B
+--> C[Data Lake<br>Raw層]
+
+C
+--> D[ETL・Spark処理]
+
+D
+--> E[Parquet]
+
+E
+--> F[Data Warehouse]
+
+F
+--> G[Power BI]
+
+G
+--> H[分析・レポート]
 ```
-
-という流れがよく採用される。
 
 ---
 
-# なぜ Avro は半構造化データなのか
+# Avro はなぜ半構造化データなのか
 
 半構造化データとは、
 
-> 構造（スキーマ）は持っているが、厳密なテーブル構造に固定されていないデータ
+> 構造（スキーマ）を持つが、厳密なテーブル構造に固定されていないデータ
 
 のこと。
-
-## データ分類
 
 ```mermaid
 flowchart TD
 
 A[データ]
 
-A --> B[構造化データ]
-A --> C[半構造化データ]
-A --> D[非構造化データ]
+A
+--> B[構造化データ]
 
-B --> E[SQLテーブル]
+A
+--> C[半構造化データ]
 
-C --> F[JSON]
-C --> G[XML]
-C --> H[Avro]
-C --> I[Parquet]
+A
+--> D[非構造化データ]
 
-D --> J[画像]
-D --> K[PDF]
-D --> L[動画]
+B
+--> E[SQLテーブル]
+
+C
+--> F[JSON]
+
+C
+--> G[XML]
+
+C
+--> H[Avro]
+
+C
+--> I[Parquet]
+
+D
+--> J[画像]
+
+D
+--> K[PDF]
+
+D
+--> L[動画]
 ```
 
 ---
 
 # JSON と Avro の違い
 
-JSON はデータの中にフィールド名が毎回含まれる。
+## JSON
+
+JSON はデータの中にフィールド名を毎回持つ。
 
 ```json
 {
@@ -73,7 +105,7 @@ JSON はデータの中にフィールド名が毎回含まれる。
 }
 ```
 
-100万件あれば、
+レコード数が増えるほど、
 
 ```text
 "id"
@@ -81,13 +113,15 @@ JSON はデータの中にフィールド名が毎回含まれる。
 "age"
 ```
 
-が100万回保存される。
+という文字列が何度も保存される。
 
 ---
 
-Avro はスキーマを別に持つ。
+## Avro
 
-## スキーマ
+Avro はスキーマを別管理する。
+
+### スキーマ
 
 ```json
 {
@@ -99,59 +133,59 @@ Avro はスキーマを別に持つ。
 }
 ```
 
-## データ
+### データ
 
 ```text
 1,Tanaka,30
 2,Suzuki,25
 ```
 
-データ本体にはフィールド名を毎回保存しないため、
+そのため、
 
-- 容量が小さい
-- 読み込みが速い
+```mermaid
+flowchart TD
 
-というメリットがある。
+A[Avro]
+
+A
+--> B[スキーマを保持]
+
+B
+--> C[データ本体を小さく保存]
+
+C
+--> D[高速読み込み]
+
+D
+--> E[大量データに向く]
+```
 
 ---
 
 # Avro がスキーマ変更に強い理由
 
-例えば最初は
+例えば最初は以下の構造だったとする。
 
 ```text
 id
 name
 ```
 
-しかなかったとする。
+---
 
-## Version1
+その後、
 
-```json
-{
-  "id": 1,
-  "name": "Tanaka"
-}
+```text
+id
+name
+email
 ```
+
+へ変更されたとする。
 
 ---
 
-後から email を追加する。
-
-## Version2
-
-```json
-{
-  "id": 1,
-  "name": "Tanaka",
-  "email": "tanaka@example.com"
-}
-```
-
----
-
-Avro では
+Avro ではフィールド追加時に、
 
 ```json
 {
@@ -161,9 +195,20 @@ Avro では
 }
 ```
 
-のように定義できる。
+のような定義が可能。
 
-すると古いデータは
+---
+
+古いデータ
+
+```json
+{
+  "id": 1,
+  "name": "Tanaka"
+}
+```
+
+を新しいスキーマで読むと、
 
 ```json
 {
@@ -173,55 +218,100 @@ Avro では
 }
 ```
 
-として解釈できる。
+として扱える。
 
 ---
 
-## スキーマ進化（Schema Evolution）
+これを Schema Evolution と呼ぶ。
 
 ```mermaid
-flowchart LR
+flowchart TD
 
-A[Version1<br/>id,name]
---> B[Version2<br/>id,name,email]
---> C[Version3<br/>id,name,email,phone]
+A[Version1]
 
-C --> D[古いデータも読める]
-A --> E[新しいデータも読める]
+A
+--> B[id]
+
+A
+--> C[name]
+
+A
+--> D[データ蓄積]
+
+D
+--> E[Version2]
+
+E
+--> F[id]
+
+E
+--> G[name]
+
+E
+--> H[email追加]
+
+H
+--> I[古いデータも利用可能]
+
+I
+--> J[システム変更の影響が少ない]
 ```
 
-つまり
+---
 
-- 列追加
-- 列削除
-- デフォルト値追加
+# なぜスキーマ変更が問題になるのか
 
-に対応しやすい。
+実際のデータ基盤では、
 
-これを
+- ETL
+- Spark
+- Data Factory
+- Power BI
+- Synapse
 
-**Schema Evolution（スキーマ進化）**
+など複数の仕組みが同じデータを利用している。
 
-と呼ぶ。
+列を追加すると、
+
+```mermaid
+flowchart TD
+
+A[スキーマ変更]
+
+A
+--> B[データ取込処理]
+
+A
+--> C[ETL処理]
+
+A
+--> D[分析基盤]
+
+A
+--> E[BIレポート]
+
+B
+--> F[修正が必要な場合がある]
+
+C
+--> F
+
+D
+--> F
+
+E
+--> F
+```
+
+データ量が数TB〜PBになると影響が大きくなる。
 
 ---
 
 # Parquet が分析向きな理由
 
-Parquet は列指向（Columnar Storage）。
+Parquet は列指向ストレージ。
 
-## テーブル
-
-```text
-id name age
-1  A    30
-2  B    25
-3  C    40
-```
-
----
-
-## 行指向
+通常の行指向データ。
 
 ```text
 1,A,30
@@ -231,7 +321,7 @@ id name age
 
 ---
 
-## Parquet（列指向）
+Parquet は列ごとに保存する。
 
 ```text
 id列
@@ -252,7 +342,7 @@ age列
 
 ---
 
-そのため
+そのため、
 
 ```sql
 SELECT age
@@ -261,44 +351,44 @@ FROM Customers
 
 を実行すると、
 
-```text
-age列だけ読む
-```
-
-ことができる。
-
 ```mermaid
-flowchart LR
+flowchart TD
 
 A[Parquetファイル]
 
-A --> B[id列]
-A --> C[name列]
-A --> D[age列]
+A
+--> B[id列]
 
-E[SELECT age]
+A
+--> C[name列]
 
-E --> D
+A
+--> D[age列]
+
+D
+--> E[SELECT age]
+
+E
+--> F[age列だけ読む]
+
+F
+--> G[高速]
 ```
 
-不要なデータを読まないため高速。
+不要な列を読まなくて済む。
 
 ---
 
-# なぜ Parquet はスキーマ変更が少し面倒なのか
+# Parquet がスキーマ変更にやや弱い理由
 
-例えば、
-
-## 古いファイル
+古いファイル。
 
 ```text
 id
 name
 ```
 
----
-
-## 新しいファイル
+新しいファイル。
 
 ```text
 id
@@ -308,80 +398,160 @@ age
 
 ---
 
-データレイク内に両方が混在すると、
+データレイクに混在すると、
 
 分析エンジンは
 
-```text
-このファイルに age はある？
-ない？
-型は一致している？
-```
+- age 列は存在するか
+- NULL を入れるべきか
+- 型は一致するか
 
-を確認しながら統合しなければならない。
+を判断する必要がある。
 
 ```mermaid
 flowchart TD
 
-A[分析クエリ]
+A[クエリ実行]
 
-A --> B[file1.parquet]
-A --> C[file2.parquet]
+A
+--> B[file1.parquet]
 
-B --> D[age列なし]
-C --> E[age列あり]
+A
+--> C[file2.parquet]
 
-D --> F[スキーママージ]
-E --> F
+B
+--> D[age列なし]
+
+C
+--> E[age列あり]
+
+D
+--> F[スキーママージ]
+
+E
+--> F
+
+F
+--> G[追加処理発生]
 ```
 
-可能ではあるが、
+つまり、
 
-分析性能を重視する Parquet にとっては追加コストになる。
+**Parquetでもスキーマ変更は可能だが、得意分野ではない。**
 
 ---
 
-# 実務でよくあるデータの流れ
+# Avro と Parquet の使い分け
 
 ```mermaid
-flowchart LR
+flowchart TD
 
-A[アプリ・Webサイト]
---> B[Avro / JSON]
+A[データ収集]
 
-B --> C[Data Lake Raw領域]
+A
+--> B{主な目的は？}
 
-C --> D[ETL / Spark]
+B
+--> C[変更に強くしたい]
 
-D --> E[Parquet]
+B
+--> D[高速分析したい]
 
-E --> F[Data Warehouse]
-E --> G[Power BI]
-E --> H[Synapse]
+C
+--> E[Avro]
+
+D
+--> F[Parquet]
+```
+
+---
+
+# 実務でのイメージ
+
+```mermaid
+flowchart TD
+
+A[Webアクセスログ]
+
+A
+--> B[項目が頻繁に増える]
+
+B
+--> C[Avroで保存]
+
+C
+--> D[Data Lake]
+
+D
+--> E[ETLで整形]
+
+E
+--> F[Parquetへ変換]
+
+F
+--> G[Power BI]
+
+G
+--> H[分析]
 ```
 
 ---
 
 # DP-900 試験向け暗記ポイント
 
-| 項目 | JSON | Avro | Parquet |
-|--------|--------|--------|--------|
-| 分類 | 半構造化 | 半構造化 | 半構造化 |
-| 可読性 | 高い | 低い | 低い |
-| 保存形式 | テキスト | バイナリ | バイナリ |
-| スキーマ | 任意 | あり | あり |
-| スキーマ変更 | 普通 | 強い | やや弱い |
-| 分析性能 | 普通 | 普通 | 高い |
-| 主な用途 | API連携 | イベントデータ | 分析基盤 |
+## JSON
+
+- 半構造化データ
+- 人が読みやすい
+- API連携向き
+
+## Avro
+
+- 半構造化データ
+- バイナリ形式
+- スキーマを持つ
+- Schema Evolution をサポート
+- イベントデータ向き
+
+## Parquet
+
+- 半構造化データ
+- 列指向ストレージ
+- 高圧縮
+- 高速集計
+- 分析向き
 
 ---
 
-# 最重要ポイント
+# 最重要まとめ
 
-試験では次の対応を覚えておけばほぼ十分。
+```mermaid
+flowchart TD
 
-- **JSON → データ交換向け**
-- **Avro → スキーマ進化（Schema Evolution）**
-- **Parquet → 列指向・高速分析**
-- **Data Lake の生データ → Avro / JSON**
-- **集計・分析用データ → Parquet**
+A[JSON]
+
+A
+--> B[データ交換向き]
+
+C[Avro]
+
+C
+--> D[スキーマ進化]
+
+D
+--> E[イベントデータ向き]
+
+F[Parquet]
+
+F
+--> G[列指向]
+
+G
+--> H[高速分析向き]
+```
+
+- **JSON = データ交換**
+- **Avro = スキーマ変更に強い**
+- **Parquet = 高速分析**
+- **生データ保存 = Avro / JSON**
+- **分析用データ = Parquet**
